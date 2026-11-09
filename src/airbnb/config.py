@@ -19,8 +19,8 @@ CURRENCY = "AUD"
 # One entry per city. To add a city, add one line here and nothing else.
 # TODO: check the paths and fill in the snapshot dates on insideairbnb.com/get-the-data
 CITIES = {
-    "sydney":    {"path": "australia/nsw/sydney",    "snapshot": "TODO"},
-    "melbourne": {"path": "australia/vic/melbourne", "snapshot": "TODO"},
+    "sydney":    {"path": "australia/nsw/sydney",    "snapshot": "2026-09-16"},
+    "melbourne": {"path": "australia/vic/melbourne", "snapshot": "2026-09-16"},
     # "brisbane": {"path": "australia/qld/brisbane",  "snapshot": "TODO"},  # city C: uncomment in week 2, not before
 }
 
