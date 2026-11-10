@@ -6,6 +6,10 @@
 LEAKAGE_COLS = [
     "estimated_revenue_l365d",  # = price x estimated_occupancy_l365d; NULL whenever price is NULL (01_eda_leakage, section 4)
     "is_valid_price",           # computed from price
+    # Raw 2026 columns: a price quoted for a sample stay = the target in another form.
+    # Not carried to silver; listed so nobody adds them later.
+    "price_quote_price_per_night", "price_quote_total_price", "price_quote_raw",
+    "price_quote_checkin_date", "price_quote_checkout_date",
 ]
 
 # Not leakage, but never features: they describe the scrape, not the listing,
@@ -13,6 +17,8 @@ LEAKAGE_COLS = [
 NON_FEATURE_COLS = [
     "id", "host_id", "name", "license", "last_scraped", "snapshot_date", "_ingested_at",
     "is_valid_coords",
+    # 100% NULL in the 2026-09 files (columns absent from the raw data), see 01_eda_leakage 2.2
+    "host_tenure_days", "host_response_time", "host_response_rate", "host_acceptance_rate", "instant_bookable",
 ]
 
 # Allowed, but kept out of the first model: not computed from price, but they react
