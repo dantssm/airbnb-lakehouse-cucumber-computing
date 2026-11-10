@@ -6,6 +6,10 @@ from . import config
 
 CHECKS_TABLE = f"{config.SILVER}.quality_checks"
 
+KNOWN_ROOM_TYPES = ["Entire home/apt", "Private room", "Shared room", "Hotel room"]
+
+TECH_COLS = {"city", "snapshot_date", "_ingested_at"}
+
 
 def run(spark, city):
     """Run the checks for one city and return {check name: number of bad rows}.
@@ -41,10 +45,24 @@ def run(spark, city):
          .alias("review_score_out_of_range"),
     ).first().asDict()
 
+    unseen = silver.filter(F.col("room_type").isNotNull() & ~F.col("room_type").isin(KNOWN_ROOM_TYPES))
+    unseen_room_types = [r["room_type"] for r in unseen.select("room_type").distinct().collect()]
+
+    data_cols = [c for c in silver.columns if c not in TECH_COLS]
+    non_null = silver.select([F.count(F.col(c)).alias(c) for c in data_cols]).first().asDict()
+    all_null_columns = sorted(c for c, n in non_null.items() if n == 0)
+
     results = {
         "rows_lost_unexplained": n_bronze - n_silver - n_bronze_no_id - n_bronze_dup_id,
         **{k: int(v or 0) for k, v in s.items()},
+        "room_type_unseen": unseen.count(),
+        "all_null_columns": len(all_null_columns),
     }
+
+    if unseen_room_types:
+        print(f"[validation] WARNING {city}: unseen room types {unseen_room_types}")
+    if all_null_columns:
+        print(f"[validation] WARNING {city}: columns that are entirely NULL: {all_null_columns}")
 
     rows = [(city, name, int(bad), n_silver) for name, bad in results.items()]
     (spark.createDataFrame(rows, "city STRING, check_name STRING, bad_rows BIGINT, total_rows BIGINT")

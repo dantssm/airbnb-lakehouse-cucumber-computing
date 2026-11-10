@@ -1,12 +1,12 @@
 """Silver: the same listings, cleaned and with proper types."""
 
+import math
 import re
 
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from . import common, config
-
 STRING_COLS = ["name", "neighbourhood_cleansed", "property_type", "room_type",
                "bathrooms_text", "amenities", "license", "host_response_time"]
 INT_COLS = ["id", "host_id", "host_listings_count", "host_total_listings_count",
@@ -17,12 +17,18 @@ INT_COLS = ["id", "host_id", "host_listings_count", "host_total_listings_count",
 DOUBLE_COLS = ["latitude", "longitude", "bathrooms", "reviews_per_month",
                "review_scores_rating", "review_scores_accuracy", "review_scores_cleanliness",
                "review_scores_checkin", "review_scores_communication", "review_scores_location",
-               "review_scores_value"]
-MONEY_COLS = ["price", "estimated_revenue_l365d"]
+               "review_scores_value",
+               "hosts_time_as_host_months"]
+MONEY_COLS = ["price", "estimated_revenue_l365d"] 
 PERCENT_COLS = ["host_response_rate", "host_acceptance_rate"]
 BOOL_COLS = ["host_is_superhost", "host_identity_verified", "host_has_profile_pic",
              "instant_bookable", "has_availability"]
 DATE_COLS = ["host_since", "first_review", "last_review", "last_scraped"]
+
+PLACEHOLDER_PRICES = [99999, 90000, 50000]
+LONG_STAY_NIGHTS = 30
+OUTLIER_IQR_MULT = 3.0 
+OUTLIER_MIN_GROUP = 30 
 
 ALL_COLS = STRING_COLS + INT_COLS + DOUBLE_COLS + MONEY_COLS + PERCENT_COLS + BOOL_COLS + DATE_COLS
 META_COLS = ["city", "snapshot_date", "_ingested_at"]
@@ -39,6 +45,41 @@ def _clean_str(c):
     """Empty strings and 'N/A' are missing values too."""
     v = F.trim(F.col(c))
     return F.when((v == "") | (F.upper(v) == "N/A"), None).otherwise(v)
+
+
+def _upper_fence(q):
+    """q = [Q1, Q3] of log(price) -> upper fence on the log scale."""
+    return q[1] + OUTLIER_IQR_MULT * (q[1] - q[0])
+
+
+def _flag_price_outliers(silver):
+    """Add is_price_outlier. Returns (dataframe, {room_type: fence in currency})."""
+    quartiles = "percentile_approx(log_price, array(0.25, 0.75), 10000)"
+    valid = silver.filter(F.col("is_valid_price")).withColumn("log_price", F.log("price"))
+
+    city_q = valid.agg(F.expr(quartiles).alias("q")).first()["q"]
+    if not city_q:  # no valid prices at all
+        return silver.withColumn("is_price_outlier", F.lit(False)), {}
+    city_fence = _upper_fence(city_q)
+
+    groups = valid.groupBy("room_type").agg(F.count("*").alias("n"), F.expr(quartiles).alias("q")).collect()
+    fences = {
+        g["room_type"]: _upper_fence(g["q"]) if g["n"] >= OUTLIER_MIN_GROUP else city_fence
+        for g in groups if g["room_type"] is not None
+    }
+
+    fence_col = F.lit(city_fence)
+    for room_type, fence in fences.items():
+        fence_col = F.when(F.col("room_type") == room_type, F.lit(fence)).otherwise(fence_col)
+
+    silver = silver.withColumn(
+        "is_price_outlier",
+        F.col("is_valid_price")
+        & ((F.log("price") > fence_col) | F.col("price").isin(PLACEHOLDER_PRICES)),
+    )
+    readable = {rt: round(math.exp(f), 2) for rt, f in fences.items()}
+    readable["_city"] = round(math.exp(city_fence), 2)
+    return silver, readable
 
 
 def build(spark, city):
@@ -101,6 +142,8 @@ def build(spark, city):
         .withColumn("amenities_count", F.size(F.from_json(F.col("amenities"), "array<string>")))
         .withColumn("amenities_count", F.when(F.col("amenities_count") >= 0, F.col("amenities_count")))
         .withColumn("host_tenure_days", F.datediff(F.col("snapshot_date"), F.col("host_since")))
+        .withColumn("is_long_stay", F.col("minimum_nights") > LONG_STAY_NIGHTS)
+        .withColumn("has_reviews", F.col("number_of_reviews") > 0)
     )
 
     silver = silver.filter(F.col("id").isNotNull())
@@ -116,6 +159,8 @@ def build(spark, city):
                     F.col("latitude").between(-90, 90) & F.col("longitude").between(-180, 180))
     )
 
+    silver, outlier_fences = _flag_price_outliers(silver)
+
     common.write_city(silver, config.LISTINGS_TABLE, city)
 
     report = {
@@ -125,6 +170,7 @@ def build(spark, city):
         "n_duplicates_removed": n_duplicates,
         "missing_columns": missing_columns,
         "cast_failures": cast_failures,
+        "price_outlier_fences": outlier_fences,
     }
     print(f"[silver] {report}")
     return report
