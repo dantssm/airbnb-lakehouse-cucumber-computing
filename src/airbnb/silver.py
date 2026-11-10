@@ -17,8 +17,7 @@ INT_COLS = ["id", "host_id", "host_listings_count", "host_total_listings_count",
 DOUBLE_COLS = ["latitude", "longitude", "bathrooms", "reviews_per_month",
                "review_scores_rating", "review_scores_accuracy", "review_scores_cleanliness",
                "review_scores_checkin", "review_scores_communication", "review_scores_location",
-               "review_scores_value",
-               "hosts_time_as_host_months"]
+               "review_scores_value", "hosts_time_as_host_years", "hosts_time_as_host_months"]  # raw: years + the remaining months (0-11)
 MONEY_COLS = ["price", "estimated_revenue_l365d"] 
 PERCENT_COLS = ["host_response_rate", "host_acceptance_rate"]
 BOOL_COLS = ["host_is_superhost", "host_identity_verified", "host_has_profile_pic",
@@ -142,6 +141,7 @@ def build(spark, city):
         .withColumn("amenities_count", F.size(F.from_json(F.col("amenities"), "array<string>")))
         .withColumn("amenities_count", F.when(F.col("amenities_count") >= 0, F.col("amenities_count")))
         .withColumn("host_tenure_days", F.datediff(F.col("snapshot_date"), F.col("host_since")))
+        .withColumn("host_tenure_months", F.col("hosts_time_as_host_years") * 12 + F.col("hosts_time_as_host_months"))
         .withColumn("is_long_stay", F.col("minimum_nights") > LONG_STAY_NIGHTS)
         .withColumn("has_reviews", F.col("number_of_reviews") > 0)
     )
