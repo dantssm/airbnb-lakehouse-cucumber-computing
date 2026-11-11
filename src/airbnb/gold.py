@@ -5,8 +5,75 @@ from pyspark.sql import functions as F
 from . import config, model
 
 
+# Table and column comments: what Genie and people read in Unity Catalog. {table: (table comment, {column: comment})}
+COMMENTS = {
+    config.PREDICTIONS_TABLE: (
+        f"One row per listing: actual price, baseline and model prediction, and the error. Prices are {config.CURRENCY} per night. "
+        "Model numbers: split = 'test' AND in_scope for Sydney and Melbourne, split = 'new_city' AND in_scope for the new city.",
+        {"listing_id": "Inside Airbnb listing id (one row per listing).",
+         "city": "City name in lower case.",
+         "split": "'train' = used to fit or tune the model; 'test' = 20% hold-out of Sydney and Melbourne; 'new_city' = city C, never seen by the model.",
+         "in_scope": "True if the listing has a price, is not a price outlier and is not a long stay (minimum_nights > 30). Use only in-scope listings for model numbers.",
+         "exclusion_reason": "Why the listing is out of scope: no_price, price_outlier or long_stay. NULL if in scope.",
+         "price": f"Advertised price per night in {config.CURRENCY} on the snapshot date (the actual value). NULL if the listing has no price.",
+         "baseline_pred": f"Baseline prediction in {config.CURRENCY}: median price of train listings with the same accommodates and room_type.",
+         "model_pred": f"Price model prediction in {config.CURRENCY} per night.",
+         "error": f"model_pred - price, in {config.CURRENCY}. Positive = the model over-prices, negative = it under-prices.",
+         "abs_error": f"Absolute error |model_pred - price| in {config.CURRENCY}. Its average is the MAE.",
+         "room_type": "Entire home/apt, Private room, Shared room or Hotel room.",
+         "neighbourhood_cleansed": "Neighbourhood of the listing. Not a model feature (other cities have other names).",
+         "accommodates": "Number of guests the listing sleeps."}),
+    config.METRICS_TABLE: (
+        f"Prediction error of the baseline and of the price model, in {config.CURRENCY}. Lower is better. One row per city, model and stage.",
+        {"city": "City name in lower case. 'all' = Sydney and Melbourne together (stage test only).",
+         "model": "'baseline' = median price per accommodates and room_type; 'model' = the price model.",
+         "mae": f"Mean absolute error in {config.CURRENCY} per night.",
+         "medae": f"Median absolute error in {config.CURRENCY} per night (not pulled by a few extreme prices).",
+         "n": "Number of in-scope listings the error is computed on.",
+         "stage": "'test' = 20% hold-out of Sydney and Melbourne; 'first_run' = new city with the model as at the end of week 1, unchanged; 'after_changes' = new city after model changes."}),
+    config.SUMMARY_TABLE: (
+        f"One row per city: size and typical prices. Prices are {config.CURRENCY} per night. Medians use in-scope listings only.",
+        {"city": "City name in lower case.",
+         "snapshot_date": "Date of the Inside Airbnb snapshot.",
+         "listings": "All listings in the snapshot.",
+         "in_scope_listings": "Listings with a price that are not a price outlier and not a long stay.",
+         "pct_no_price": "Percent of listings without a price (mostly inactive listings).",
+         "median_price": f"Median price per night in {config.CURRENCY}, in-scope listings.",
+         "median_price_entire_home": f"Median price per night in {config.CURRENCY}, in-scope entire homes/apartments.",
+         "avg_availability_365": "Average number of days available in the next 365, for listings with a price.",
+         "avg_review_score": "Average overall review score (0-5).",
+         "hosts": "Number of distinct hosts.",
+         "pct_entire_home": "Percent of listings that are entire homes/apartments."}),
+}
+
+
+def _quote(text):
+    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _comment(spark, table):
+    """Set the table and column comments. Never stops the pipeline: a failed comment is only printed."""
+    table_comment, columns = COMMENTS[table]
+    try:
+        spark.sql(f"COMMENT ON TABLE {table} IS {_quote(table_comment)}")
+        existing = set(spark.table(table).columns)
+        for column, text in columns.items():
+            if column in existing:
+                spark.sql(f"ALTER TABLE {table} ALTER COLUMN `{column}` COMMENT {_quote(text)}")
+    except Exception as e:
+        print(f"[gold] could not set comments on {table}: {e}")
+
+
+def add_comments(spark):
+    """Set the comments on the gold tables that already exist. Run it once to add them without rewriting any table."""
+    for table in COMMENTS:
+        if spark.catalog.tableExists(table):
+            _comment(spark, table)
+
+
 def _save(df, table):
     df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(table)
+    _comment(df.sparkSession, table)   # a rewritten table can lose its comments
 
 
 def _replace_city(rows, table, city, extra=""):
@@ -16,6 +83,7 @@ def _replace_city(rows, table, city, extra=""):
         return _save(rows, table)
     spark.sql(f"DELETE FROM {table} WHERE city = '{city}' {extra}")
     rows.select(*spark.table(table).columns).write.mode("append").saveAsTable(table)
+    _comment(spark, table)
 
 
 def _prediction_rows(df):
