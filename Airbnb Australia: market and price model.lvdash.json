@@ -1,0 +1,2199 @@
+{
+  "datasets": [
+    {
+      "name": "78c19710",
+      "displayName": "city_summary",
+      "config": {
+        "version": "1.1",
+        "source": "airbnb.gold.city_summary",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "comment": "Represents the total number of rows in the dataset. Use this measure to count all",
+            "displayName": "Count"
+          },
+          {
+            "name": "listings_per_host",
+            "expr": "SUM(`listings`) * 1.0 / NULLIF(SUM(`hosts`), 0)",
+            "displayName": "Listings per host"
+          }
+        ]
+      }
+    },
+    {
+      "name": "6b3cc0fe",
+      "displayName": "model_metrics",
+      "config": {
+        "version": "1.1",
+        "source": "airbnb.gold.model_metrics",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "comment": "Represents the total number of rows in the dataset. Use this measure to count all",
+            "displayName": "Count"
+          },
+          {
+            "name": "mae_improvement_pct",
+            "expr": "(SUM(`mae`) FILTER (WHERE `model` = 'baseline') - SUM(`mae`) FILTER (WHERE `model` = 'model')) * 100.0 / NULLIF(SUM(`mae`) FILTER (WHERE `model` = 'baseline'), 0)",
+            "displayName": "MAE improvement over baseline, %"
+          }
+        ]
+      }
+    },
+    {
+      "name": "9fb7c30c",
+      "displayName": "price_predictions",
+      "config": {
+        "version": "1.1",
+        "source": "airbnb.gold.price_predictions",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "comment": "Represents the total number of rows in the dataset. Use this measure to count all",
+            "displayName": "Count"
+          }
+        ]
+      }
+    },
+    {
+      "name": "9ece6b36",
+      "displayName": "Listings Count by City and Room Type Summary",
+      "queryLines": [
+        "SELECT city, room_type, COUNT(*) AS listings\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE in_scope\n",
+        "GROUP BY city, room_type;"
+      ]
+    },
+    {
+      "name": "0240fd49",
+      "displayName": "Airbnb Test Set Price Prediction Results Dataset",
+      "queryLines": [
+        "SELECT city, room_type, neighbourhood_cleansed AS neighbourhood, accommodates,\n",
+        "       price, model_pred, baseline_pred, error, abs_error\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE split = 'test' AND in_scope = true;"
+      ]
+    },
+    {
+      "name": "7eb25cda",
+      "displayName": "Airbnb City Room Type Price Prediction Errors Summary",
+      "queryLines": [
+        "SELECT city, room_type, COUNT(*) AS n,\n",
+        "       ROUND(AVG(abs_error), 1) AS mae, ROUND(AVG(error), 1) AS bias\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE split = 'test' AND in_scope = true\n",
+        "GROUP BY city, room_type;"
+      ]
+    },
+    {
+      "name": "91adb18a",
+      "displayName": "City Neighborhood Airbnb Listings and Median Prices Summary",
+      "queryLines": [
+        "WITH n AS (\n",
+        "  SELECT city, neighbourhood_cleansed AS neighbourhood,\n",
+        "         COUNT(*) AS listings,\n",
+        "         ROUND(PERCENTILE(price, 0.5), 0) AS median_price\n",
+        "  FROM airbnb.gold.price_predictions\n",
+        "  WHERE in_scope = true\n",
+        "  GROUP BY city, neighbourhood_cleansed\n",
+        "  HAVING COUNT(*) >= 30\n",
+        "), r AS (\n",
+        "  SELECT *,\n",
+        "         ROW_NUMBER() OVER (PARTITION BY city ORDER BY median_price DESC) AS rn_top,\n",
+        "         ROW_NUMBER() OVER (PARTITION BY city ORDER BY median_price ASC) AS rn_bottom\n",
+        "  FROM n\n",
+        ")\n",
+        "SELECT city, neighbourhood, listings, median_price,\n",
+        "       CASE WHEN rn_top <= 5 THEN 'Most expensive' ELSE 'Cheapest' END AS group_label\n",
+        "FROM r\n",
+        "WHERE rn_top <= 5 OR rn_bottom <= 5;"
+      ]
+    },
+    {
+      "name": "most_underpriced_listings",
+      "displayName": "Most Underpriced Listings (Top 20 Test Set)",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT city, room_type, neighbourhood_cleansed AS neighbourhood, accommodates,\n       price, model_pred, error\nFROM airbnb.gold.price_predictions WHERE split = 'test' AND in_scope = true ORDER BY error ASC LIMIT 20\n",
+        "dimensions": [
+          {
+            "name": "city",
+            "expr": "city"
+          },
+          {
+            "name": "room_type",
+            "expr": "room_type"
+          },
+          {
+            "name": "neighbourhood",
+            "expr": "neighbourhood"
+          },
+          {
+            "name": "accommodates",
+            "expr": "accommodates"
+          },
+          {
+            "name": "price",
+            "expr": "price"
+          },
+          {
+            "name": "model_pred",
+            "expr": "model_pred"
+          },
+          {
+            "name": "error",
+            "expr": "error"
+          }
+        ]
+      }
+    },
+    {
+      "name": "most_overpriced_listings",
+      "displayName": "Most Overpriced Listings (Top 20 Test Set)",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT city, room_type, neighbourhood_cleansed AS neighbourhood, accommodates,\n       price, model_pred, error\nFROM airbnb.gold.price_predictions WHERE split = 'test' AND in_scope = true ORDER BY error DESC LIMIT 20\n",
+        "dimensions": [
+          {
+            "name": "city",
+            "expr": "city"
+          },
+          {
+            "name": "room_type",
+            "expr": "room_type"
+          },
+          {
+            "name": "neighbourhood",
+            "expr": "neighbourhood"
+          },
+          {
+            "name": "accommodates",
+            "expr": "accommodates"
+          },
+          {
+            "name": "price",
+            "expr": "price"
+          },
+          {
+            "name": "model_pred",
+            "expr": "model_pred"
+          },
+          {
+            "name": "error",
+            "expr": "error"
+          }
+        ]
+      }
+    },
+    {
+      "name": "neighbourhood_errors",
+      "displayName": "Airbnb City Neighbourhood Price Prediction Errors Summary",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT city, neighbourhood_cleansed AS neighbourhood, COUNT(*) AS n,\n       ROUND(AVG(abs_error), 1) AS mae\nFROM airbnb.gold.price_predictions WHERE split = 'test' AND in_scope = true GROUP BY city, neighbourhood_cleansed ORDER BY mae DESC LIMIT 15\n",
+        "dimensions": [
+          {
+            "name": "city",
+            "expr": "city"
+          },
+          {
+            "name": "neighbourhood",
+            "expr": "neighbourhood"
+          },
+          {
+            "name": "n",
+            "expr": "n"
+          },
+          {
+            "name": "mae",
+            "expr": "mae"
+          }
+        ]
+      }
+    },
+    {
+      "name": "77888b5c",
+      "displayName": "City Room Type Median Price and Listings Summary",
+      "queryLines": [
+        "SELECT city, room_type,\n",
+        "       ROUND(PERCENTILE(price, 0.5), 0) AS median_price,\n",
+        "       COUNT(*) AS listings\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE in_scope = true\n",
+        "GROUP BY city, room_type\n",
+        "HAVING COUNT(*) >= 30;"
+      ]
+    },
+    {
+      "name": "cb0d4d7d",
+      "displayName": "Sydney Melbourne Median Price Comparison Gap",
+      "queryLines": [
+        "SELECT\n",
+        "  MAX(CASE WHEN city = 'sydney' THEN median_price END) AS sydney_median,\n",
+        "  MAX(CASE WHEN city = 'melbourne' THEN median_price END) AS melbourne_median,\n",
+        "  ROUND(100 * (\n",
+        "    MAX(CASE WHEN city = 'sydney' THEN median_price END) /\n",
+        "    MAX(CASE WHEN city = 'melbourne' THEN median_price END) - 1), 0) AS gap_pct\n",
+        "FROM airbnb.gold.city_summary\n",
+        "WHERE city IN ('sydney', 'melbourne');"
+      ]
+    },
+    {
+      "name": "420a55af",
+      "displayName": "City Model Test Metrics for Sydney and Melbourne",
+      "queryLines": [
+        "SELECT\n",
+        "  city,\n",
+        "  model,\n",
+        "  CONCAT(city, ' ', model) AS series,\n",
+        "  ROUND(mae, 0) AS mae\n",
+        "FROM airbnb.gold.model_metrics\n",
+        "WHERE stage = 'test' AND city IN ('sydney', 'melbourne');"
+      ]
+    },
+    {
+      "name": "f39c1cf9",
+      "displayName": "Airbnb City Listings Overview for Sydney and Melbourne",
+      "queryLines": [
+        "SELECT\n",
+        "  city,\n",
+        "  listings,\n",
+        "  hosts,\n",
+        "  ROUND(listings / hosts, 1) AS listings_per_host,\n",
+        "  pct_entire_home,\n",
+        "  ROUND(avg_availability_365, 0) AS avg_availability_365,\n",
+        "  ROUND(avg_review_score, 2) AS avg_review_score,\n",
+        "  median_price\n",
+        "FROM airbnb.gold.city_summary\n",
+        "WHERE city IN ('sydney', 'melbourne');"
+      ]
+    },
+    {
+      "name": "7884f2f4",
+      "displayName": "Airbnb City Room Type Price Prediction Errors Summary",
+      "queryLines": [
+        "SELECT city, room_type,\n",
+        "       ROUND(AVG(error), 0) AS bias,\n",
+        "       ROUND(AVG(abs_error), 0) AS mae,\n",
+        "       COUNT(*) AS listings\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE in_scope = true AND split IN ('test', 'new_city')\n",
+        "GROUP BY city, room_type\n",
+        "HAVING COUNT(*) >= 30;"
+      ]
+    },
+    {
+      "name": "35282aff",
+      "displayName": "Airbnb Test Set Filtered Price And Model Predictions",
+      "queryLines": [
+        "SELECT city, price, model_pred\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE split = 'test' AND in_scope = true AND price <= 1000\n",
+        "  AND pmod(hash(listing_id), 5) = 0;\n",
+        "  "
+      ]
+    },
+    {
+      "name": "3e8809a4",
+      "displayName": "Model Error Metrics for Sydney Melbourne and Brisbane",
+      "queryLines": [
+        "SELECT city, model, ROUND(mae, 1) AS mae\n",
+        "FROM airbnb.gold.model_metrics\n",
+        "WHERE (city IN ('sydney', 'melbourne') AND stage = 'test')\n",
+        "   OR (city = 'brisbane' AND stage = 'first_run');"
+      ]
+    },
+    {
+      "name": "fa0d9933",
+      "displayName": "Top Airbnb Listings With Lowest Prediction Errors",
+      "queryLines": [
+        "SELECT listing_id, city, room_type, neighbourhood_cleansed, price,\n",
+        "       ROUND(model_pred, 0) AS model_pred, ROUND(error, 0) AS error\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE split = 'test' AND in_scope = true\n",
+        "ORDER BY error ASC\n",
+        "LIMIT 10;"
+      ]
+    },
+    {
+      "name": "9e587eba",
+      "displayName": "City Price Buckets With Average Prediction Errors",
+      "queryLines": [
+        "SELECT city,\n",
+        "       CAST(FLOOR(price / 100) * 100 AS INT) AS price_from,\n",
+        "       ROUND(AVG(error), 0) AS avg_error,\n",
+        "       COUNT(*) AS listings\n",
+        "FROM airbnb.gold.price_predictions\n",
+        "WHERE in_scope = true AND split IN ('test', 'new_city') AND price < 1500\n",
+        "GROUP BY city, CAST(FLOOR(price / 100) * 100 AS INT)\n",
+        "HAVING COUNT(*) >= 30;"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "dc2ac787",
+      "displayName": "City Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "city_glance_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "78c19710",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(in_scope_listings)",
+                      "expression": "SUM(`in_scope_listings`)"
+                    },
+                    {
+                      "name": "avg(median_price)",
+                      "expression": "AVG(`median_price`)"
+                    },
+                    {
+                      "name": "sum(hosts)",
+                      "expression": "SUM(`hosts`)"
+                    },
+                    {
+                      "name": "avg(avg_availability_365)",
+                      "expression": "AVG(`avg_availability_365`)"
+                    },
+                    {
+                      "name": "avg(avg_review_score)",
+                      "expression": "AVG(`avg_review_score`)"
+                    },
+                    {
+                      "name": "avg(pct_no_price)",
+                      "expression": "AVG(`pct_no_price`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "AVG(`median_price`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Sydney is the priciest (347 AUD) and Melbourne the cheapest (263); a quarter of Melbourne listings show no price"
+              },
+              "headerStyle": {
+                "fontWeight": 700
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "city",
+                    "displayName": "City"
+                  },
+                  {
+                    "fieldName": "sum(in_scope_listings)",
+                    "format": {
+                      "abbreviation": "none",
+                      "type": "number-plain"
+                    },
+                    "displayName": "Listings in model"
+                  },
+                  {
+                    "fieldName": "avg(median_price)",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Median price, AUD"
+                  },
+                  {
+                    "fieldName": "sum(hosts)",
+                    "format": {
+                      "abbreviation": "none",
+                      "type": "number-plain"
+                    },
+                    "displayName": "Hosts"
+                  },
+                  {
+                    "fieldName": "avg(avg_availability_365)",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Avg availability, days"
+                  },
+                  {
+                    "fieldName": "avg(avg_review_score)",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 2,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Avg review score"
+                  },
+                  {
+                    "fieldName": "avg(pct_no_price)",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 1,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Listings without price, %"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 2
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "febfe212",
+            "spec": {
+              "widgetType": "text",
+              "version": 1,
+              "encodings": {
+                "text": {
+                  "lines": [
+                    "# Overview: three Australian cities at a glance"
+                  ],
+                  "fields": []
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "listings_vs_hosts_by_city",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "78c19710",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "measure(listings_per_host)",
+                      "expression": "MEASURE(`listings_per_host`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "fields": [],
+                  "value": "Brisbane hosts run the most listings each: 2.3 per host vs 2.1 in Sydney and 1.8 in Melbourne"
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "city",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "City"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(listings_per_host)",
+                  "axis": {
+                    "title": "Listings per host"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "min": 0,
+                      "type": "custom"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#A9C4E8",
+                        "value": "brisbane"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "median_price_by_room_type",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "77888b5c",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    },
+                    {
+                      "name": "sum(median_price)",
+                      "expression": "SUM(`median_price`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Sydney costs the most for entire homes and private rooms",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "room_type",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "Room type"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(median_price)",
+                  "axis": {
+                    "title": "Median price, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "min": 0,
+                      "type": "custom",
+                      "max": 450
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "legend": {
+                    "title": "City"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#A9C4E8",
+                        "value": "brisbane"
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 12,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "listing_mix_by_city",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9ece6b36",
+                  "fields": [
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    },
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(listings)",
+                      "expression": "SUM(`listings`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "The mix is almost identical: 77-80% entire homes in all three cities",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "percent-stack"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "city",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "City"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(listings)",
+                  "axis": {
+                    "title": "Share of city listings, %"
+                  },
+                  "format": {
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "max"
+                    },
+                    "type": "number-percent"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "room_type",
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#2A9D8F",
+                        "value": "Entire home/apt"
+                      },
+                      {
+                        "color": "#8E6BBF",
+                        "value": "Hotel room"
+                      },
+                      {
+                        "color": "#E9A23B",
+                        "value": "Private room"
+                      },
+                      {
+                        "color": "#D1495B",
+                        "value": "Shared room"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 18,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "neighbourhood_extremes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "91adb18a",
+                  "fields": [
+                    {
+                      "name": "group_label",
+                      "expression": "`group_label`"
+                    },
+                    {
+                      "name": "sum(median_price)",
+                      "expression": "SUM(`median_price`)"
+                    },
+                    {
+                      "name": "neighbourhood",
+                      "expression": "`neighbourhood`"
+                    },
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "facet": {
+                "type": "wrap",
+                "fieldName": "city",
+                "layout": {
+                  "column": {
+                    "type": "count",
+                    "value": 3
+                  },
+                  "row": {
+                    "type": "count",
+                    "value": 1
+                  }
+                },
+                "scale": {
+                  "type": "categorical"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Location moves price a lot: Sydney's priciest neighbourhood costs 5x its cheapest",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(median_price)",
+                  "axis": {
+                    "title": "Median price, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "neighbourhood",
+                  "axis": {
+                    "hideGrid": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "group_label",
+                  "displayName": "Type of costs",
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#1F4E79",
+                        "value": "Most expensive"
+                      },
+                      {
+                        "color": "#9DC3E6",
+                        "value": "Cheapest"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "7f26edb0",
+      "displayName": "Cross-city comparison",
+      "layout": [
+        {
+          "widget": {
+            "name": "46a9e346",
+            "spec": {
+              "widgetType": "text",
+              "version": 1,
+              "encodings": {
+                "text": {
+                  "lines": [
+                    "# Model: it cuts the error by 15-27% in the cities it was trained on, but only 5% in new city Brisbane"
+                  ],
+                  "fields": []
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "counter_sydney_median",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cb0d4d7d",
+                  "fields": [
+                    {
+                      "name": "max(sydney_median)",
+                      "expression": "MAX(`sydney_median`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Sydney: median price, AUD"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "max(sydney_median)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "counter_melbourne_median",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cb0d4d7d",
+                  "fields": [
+                    {
+                      "name": "max(melbourne_median)",
+                      "expression": "MAX(`melbourne_median`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Melbourne: median price, AUD"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "max(melbourne_median)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "counter_gap_pct",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cb0d4d7d",
+                  "fields": [
+                    {
+                      "name": "max(gap_pct)",
+                      "expression": "MAX(`gap_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Sydney is pricier than Melbourne by"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "max(gap_pct)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "formatTemplate": "+{{ @formatted }}%"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "room_type_price_compare",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "77888b5c",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    },
+                    {
+                      "name": "avg(median_price)",
+                      "expression": "AVG(`median_price`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`city` IN ('sydney', 'melbourne')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Sydney is pricier for entire homes (397 vs 301 AUD), but Melbourne's hotel rooms cost more",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "room_type",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "Room type"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(median_price)",
+                  "axis": {
+                    "title": "Median price, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "max": 450,
+                      "min": 0,
+                      "type": "custom"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 12,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "mae_series_by_city",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "420a55af",
+                  "fields": [
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    },
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(mae)",
+                      "expression": "SUM(`mae`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "The model cuts the error in both cities: Sydney 190 to 138 AUD (-27%), Melbourne 107 to 91 (-15%)",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "city",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "City"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "baseline",
+                        "model"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(mae)",
+                  "axis": {
+                    "title": "Mean absolute error, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "max": 220,
+                      "min": 0,
+                      "type": "custom"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "series",
+                  "legend": {
+                    "title": "Predictor"
+                  },
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#9AA9BF",
+                        "value": "sydney baseline"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney model"
+                      },
+                      {
+                        "color": "#B3C8E4",
+                        "value": "melbourne baseline"
+                      },
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne model"
+                      }
+                    ],
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "sydney baseline",
+                        "sydney model",
+                        "melbourne baseline",
+                        "melbourne model"
+                      ]
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "market_compare_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f39c1cf9",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "listings",
+                      "expression": "`listings`"
+                    },
+                    {
+                      "name": "hosts",
+                      "expression": "`hosts`"
+                    },
+                    {
+                      "name": "listings_per_host",
+                      "expression": "`listings_per_host`"
+                    },
+                    {
+                      "name": "pct_entire_home",
+                      "expression": "`pct_entire_home`"
+                    },
+                    {
+                      "name": "avg_availability_365",
+                      "expression": "`avg_availability_365`"
+                    },
+                    {
+                      "name": "avg_review_score",
+                      "expression": "`avg_review_score`"
+                    },
+                    {
+                      "name": "median_price",
+                      "expression": "`median_price`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`city`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Beyond price the markets look alike: review scores are 4.72 vs 4.74, Sydney has 5 points more entire homes"
+              },
+              "headerStyle": {
+                "fontWeight": 700
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "city",
+                    "displayName": "City"
+                  },
+                  {
+                    "fieldName": "listings",
+                    "format": {
+                      "abbreviation": "none",
+                      "hideGroupSeparator": false,
+                      "type": "number-plain"
+                    },
+                    "displayName": "Listings"
+                  },
+                  {
+                    "fieldName": "hosts",
+                    "format": {
+                      "abbreviation": "none",
+                      "hideGroupSeparator": false,
+                      "type": "number-plain"
+                    },
+                    "displayName": "Hosts"
+                  },
+                  {
+                    "fieldName": "listings_per_host",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 1,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Listings per host"
+                  },
+                  {
+                    "fieldName": "pct_entire_home",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 1,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Entire homes %"
+                  },
+                  {
+                    "fieldName": "avg_availability_365",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Avg availability (days/year)"
+                  },
+                  {
+                    "fieldName": "avg_review_score",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 2,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Avg review score"
+                  },
+                  {
+                    "fieldName": "median_price",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "type": "number-plain"
+                    },
+                    "displayName": "Median price (AUD)"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 0
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 12,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "0a872b12",
+      "displayName": "Model",
+      "layout": [
+        {
+          "widget": {
+            "name": "ccb2aed8",
+            "spec": {
+              "widgetType": "text",
+              "version": 1,
+              "encodings": {
+                "text": {
+                  "lines": [
+                    "# Model: it cuts the error by 22% in Sydney and Melbourne, but only 5% in new city Brisbane"
+                  ],
+                  "fields": []
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "mae_by_city_baseline_vs_model",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "3e8809a4",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(mae)",
+                      "expression": "SUM(`mae`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "The model cuts the error by 27% in Sydney and 15% in Melbourne, but only 5% in new city Brisbane"
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "city",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "City"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "sydney",
+                        "melbourne",
+                        "brisbane"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(mae)",
+                  "axis": {
+                    "title": "Mean absolute error, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "max": 220,
+                      "min": 0,
+                      "type": "custom"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "model",
+                  "legend": {
+                    "title": "Predictor"
+                  },
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#A9C4E8",
+                        "value": "baseline"
+                      },
+                      {
+                        "color": "#4F81BD",
+                        "value": "model"
+                      }
+                    ],
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "baseline",
+                        "model"
+                      ]
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "bias_by_room_type_city",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7884f2f4",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(bias)",
+                      "expression": "SUM(`bias`)"
+                    },
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`room_type` IN ('Entire home/apt', 'Private room')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "fields": [],
+                  "value": "The model underprices Sydney entire homes by 99 AUD on average; Melbourne is almost unbiased (+11)"
+                }
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(bias)",
+                  "axis": {
+                    "title": "Average error, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "domain": {
+                      "min": -130,
+                      "type": "custom"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "room_type",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "Room type"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "legend": {
+                    "title": "City"
+                  },
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#A9C4E8",
+                        "value": "brisbane"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "mae_by_room_type_city",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7884f2f4",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "sum(mae)",
+                      "expression": "SUM(`mae`)"
+                    },
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`room_type` IN ('Entire home/apt', 'Private room')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Entire homes are the hardest to price in every city: errors of 91-161 AUD vs about 45 for private rooms"
+              },
+              "version": 3,
+              "mark": {
+                "layout": "group"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(mae)",
+                  "axis": {
+                    "title": "Mean absolute error, AUD"
+                  },
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 0,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "room_type",
+                  "axis": {
+                    "hideGrid": true,
+                    "title": "Room type"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "legend": {
+                    "title": "City"
+                  },
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#A9C4E8",
+                        "value": "brisbane"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "display": {
+                    "type": "all"
+                  },
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "error_by_price_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9e587eba",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "price_from",
+                      "expression": "`price_from`"
+                    },
+                    {
+                      "name": "avg_error",
+                      "expression": "`avg_error`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "The model is accurate below 300 AUD but increasingly underprices expensive listings, by about 280 AUD at 800 AUD in Sydney"
+              },
+              "annotations": [
+                {
+                  "encodings": {
+                    "y": {
+                      "dataValue": "0",
+                      "dataType": "DOUBLE"
+                    }
+                  },
+                  "type": "horizontal-line"
+                }
+              ],
+              "version": 3,
+              "mark": {
+                "marker": {
+                  "shape": "circle"
+                }
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "price_from",
+                  "axis": {
+                    "title": "Actual price bucket, AUD (starting at)"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg_error",
+                  "axis": {
+                    "title": "Average error, AUD"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "city",
+                  "legend": {
+                    "title": "City"
+                  },
+                  "scale": {
+                    "mappings": [
+                      {
+                        "color": "#4F81BD",
+                        "value": "melbourne"
+                      },
+                      {
+                        "color": "#1F3A5F",
+                        "value": "sydney"
+                      },
+                      {
+                        "color": "#A9C4E8",
+                        "value": "brisbane"
+                      }
+                    ],
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "underpriced_top_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fa0d9933",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "room_type",
+                      "expression": "`room_type`"
+                    },
+                    {
+                      "name": "neighbourhood_cleansed",
+                      "expression": "`neighbourhood_cleansed`"
+                    },
+                    {
+                      "name": "price",
+                      "expression": "`price`"
+                    },
+                    {
+                      "name": "model_pred",
+                      "expression": "`model_pred`"
+                    },
+                    {
+                      "name": "error",
+                      "expression": "`error`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "fields": [],
+                  "value": "The 10 worst underestimates are all Sydney entire homes priced 3,300 to 5,000 AUD; the model predicts 270 to 1,700"
+                }
+              },
+              "headerStyle": {
+                "fontWeight": 700
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "city",
+                    "displayName": "City"
+                  },
+                  {
+                    "fieldName": "room_type",
+                    "displayName": "Room type"
+                  },
+                  {
+                    "fieldName": "neighbourhood_cleansed",
+                    "displayName": "Neighbourhood"
+                  },
+                  {
+                    "fieldName": "price",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "hideGroupSeparator": false,
+                      "type": "number-plain"
+                    },
+                    "displayName": "Actual price (AUD)"
+                  },
+                  {
+                    "fieldName": "model_pred",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "hideGroupSeparator": false,
+                      "type": "number-plain"
+                    },
+                    "displayName": "Predicted price (AUD)"
+                  },
+                  {
+                    "fieldName": "error",
+                    "format": {
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "places": 0,
+                        "type": "exact"
+                      },
+                      "hideGroupSeparator": false,
+                      "type": "number-plain"
+                    },
+                    "displayName": "Error (AUD)"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 20,
+            "width": 12,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED",
+      "visualizationColorMappings": [
+        {
+          "value": "sydney",
+          "color": "#1F4E79"
+        },
+        {
+          "value": "melbourne",
+          "color": "#E8710A"
+        },
+        {
+          "value": "brisbane",
+          "color": "#2E7D32"
+        }
+      ]
+    },
+    "applyModeEnabled": false
+  }
+}
