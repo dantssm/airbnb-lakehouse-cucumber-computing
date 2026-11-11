@@ -82,6 +82,22 @@ def evaluate(d, pred_col, name):
              .withColumn("model", F.lit(name)).select("city", "model", "mae", "medae", "n"))
 
 
+def score_new_city(spark, fitted, stats, city):
+    """Score a city the model never saw. All its listings count as test (split = 'new_city').
+    The baseline medians come from the same train + validation rows of A and B as in 02_model."""
+    silver = spark.table(config.LISTINGS_TABLE)
+    dev = add_split(silver.filter(F.col("city").isin(*config.TRAIN_CITIES))).filter("in_scope AND split != 'test'")
+    new = add_scope(silver.filter(F.col("city") == city)).withColumn("split", F.lit("new_city"))
+    return scored(fitted, add_baseline(dev, features.make_features(new, stats)))
+
+
+def evaluate_new_city(d, city):
+    """Baseline and model error on the in-scope listings of the new city."""
+    d = d.filter("in_scope")
+    return (evaluate(d, "baseline_pred", "baseline").unionByName(evaluate(d, "pred", "model"))
+             .filter(F.col("city") == city))
+
+
 def evaluate_all(models, d):
     return reduce(DataFrame.unionByName, [evaluate(scored(m, d), "pred", n) for n, m in models.items()]).toPandas()
 

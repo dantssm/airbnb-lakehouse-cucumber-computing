@@ -63,6 +63,7 @@ def make_features(d, st):
     dx = (F.col("longitude") - F.col("mlon")) * 111.2 * F.cos(F.radians("latitude"))
     return (d.join(mid, "city")
              .withColumn("dist_to_centre_km", F.sqrt(dx * dx + dy * dy))
+             .withColumn("dist_pct", F.percent_rank().over(Window.partitionBy("city").orderBy("dist_to_centre_km")))  # experiment
              .withColumn("building_type", BUILDING)
              .withColumn("property_group", F.when(F.col("building_type").isin(st["common_types"]), F.col("building_type")).otherwise("Other"))
              .withColumn("has_reviews", F.coalesce(F.col("has_reviews").cast("int"), F.lit(0)))
